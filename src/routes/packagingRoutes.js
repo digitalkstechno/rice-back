@@ -5,6 +5,9 @@ const packagingController = require('../controllers/packagingController');
 // GET all packaging data
 router.get('/', packagingController.getAllPackaging);
 
+// GET single packaging entry
+router.get('/:id', packagingController.getPackagingById);
+
 // POST new packaging data
 router.post('/', packagingController.createPackaging);
 

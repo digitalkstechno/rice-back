@@ -10,6 +10,20 @@ exports.getAllPackaging = async (req, res) => {
   }
 };
 
+// Get single packaging entry by ID
+exports.getPackagingById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const data = await Packaging.findById(id);
+    if (!data) {
+      return res.status(404).json({ message: 'Packaging entry not found' });
+    }
+    res.status(200).json(data);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching packaging data', error: error.message });
+  }
+};
+
 // Create a new packaging entry
 exports.createPackaging = async (req, res) => {
   try {

@@ -8,7 +8,7 @@ const settingRoutes = require('./settingRoutes');
 const router = express.Router();
 
 const packagingRoutes = require('./packagingRoutes');
-
+const botRoutes = require('./botRoutes');
 
 router.use('/auth', authRoutes);
 router.use('/leads', leadRoutes);
@@ -16,6 +16,7 @@ router.use('/exmill', exmillRoutes);
 router.use('/freight', freightRoutes);
 router.use('/settings', settingRoutes);
 router.use('/packaging', packagingRoutes);
+router.use('/bot', botRoutes);
 
 module.exports = router;
     

@@ -1,0 +1,251 @@
+{
+	"info": {
+		"name": "Rice Bot Automation APIs",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Get Menus",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:5000/api/bot/menus",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"api",
+						"bot",
+						"menus"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get Dynamic Sizes",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:5000/api/bot/menus/sizes",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"api",
+						"bot",
+						"menus",
+						"sizes"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get Dynamic Packaging Types (Filtered)",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:5000/api/bot/menus/packaging-types?size=800 g",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"api",
+						"bot",
+						"menus",
+						"packaging-types"
+					],
+					"query": [
+						{
+							"key": "size",
+							"value": "800 g"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get Dynamic Varieties",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:5000/api/bot/menus/varieties",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"api",
+						"bot",
+						"menus",
+						"varieties"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get Dynamic Forms (Filtered)",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:5000/api/bot/menus/forms?variety=1121 Basmati",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"api",
+						"bot",
+						"menus",
+						"forms"
+					],
+					"query": [
+						{
+							"key": "variety",
+							"value": "1121 Basmati"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get Dynamic Regions (CIF)",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:5000/api/bot/menus/regions",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"api",
+						"bot",
+						"menus",
+						"regions"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get Dynamic Countries (CIF Filtered)",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:5000/api/bot/menus/countries?region=Middle East",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"api",
+						"bot",
+						"menus",
+						"countries"
+					],
+					"query": [
+						{
+							"key": "region",
+							"value": "Middle East"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Calculate Quote",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"variety\": \"1121 Basmati\",\n  \"form\": \"Steam\",\n  \"size\": \"500 gram\",\n  \"packType\": \"Fabric / Non woven Bags\",\n  \"destination\": \"UAE — Jebel Ali\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:5000/api/bot/quote",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"api",
+						"bot",
+						"quote"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Create Lead",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"fullName\": \"John Doe\",\n  \"mobileNumber\": \"1234567890\",\n  \"companyName\": \"ABC Corp\",\n  \"country\": \"India\",\n  \"city\": \"Ahmedabad\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:5000/api/bot/lead",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"api",
+						"bot",
+						"lead"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
