@@ -68,8 +68,8 @@ const getDynamicSizes = async (req, res, next) => {
     if (req.query.group) {
       const q = req.query.group.toUpperCase();
       const key = Object.keys(groups).find(k => k.toUpperCase().includes(q));
-      if (key) responseData = { [key]: groups[key] };
-      else responseData = {};
+      if (key) responseData = groups[key];
+      else responseData = [];
     }
 
     res.status(200).json({
@@ -160,8 +160,8 @@ const getDynamicPackagingTypes = async (req, res, next) => {
     if (req.query.group) {
       const q = req.query.group.toUpperCase();
       const key = Object.keys(groups).find(k => k.toUpperCase().includes(q));
-      if (key) responseData = { [key]: groups[key] };
-      else responseData = {};
+      if (key) responseData = groups[key];
+      else responseData = [];
     }
 
     res.status(200).json({
@@ -212,8 +212,8 @@ const getDynamicVarieties = async (req, res, next) => {
     if (req.query.group) {
       const q = req.query.group.toUpperCase();
       const key = Object.keys(groups).find(k => k.toUpperCase().includes(q));
-      if (key) responseData = { [key]: groups[key] };
-      else responseData = {};
+      if (key) responseData = groups[key];
+      else responseData = [];
     }
 
     res.status(200).json({
@@ -262,8 +262,8 @@ const getDynamicForms = async (req, res, next) => {
     if (req.query.group) {
       const q = req.query.group.toUpperCase();
       const key = Object.keys(groups).find(k => k.toUpperCase().includes(q));
-      if (key) responseData = { [key]: groups[key] };
-      else responseData = {};
+      if (key) responseData = groups[key];
+      else responseData = [];
     }
 
     res.status(200).json({
@@ -426,8 +426,8 @@ const getDynamicRegions = async (req, res, next) => {
     if (req.query.group) {
       const q = req.query.group.toUpperCase();
       const key = Object.keys(groups).find(k => k.toUpperCase().includes(q));
-      if (key) responseData = { [key]: groups[key] };
-      else responseData = {};
+      if (key) responseData = groups[key];
+      else responseData = [];
     }
 
     res.status(200).json({
@@ -523,8 +523,8 @@ const getDynamicCountries = async (req, res, next) => {
     if (req.query.group) {
       const q = req.query.group.toUpperCase();
       const key = Object.keys(formattedData).find(k => k.toUpperCase().includes(q));
-      if (key) responseData = { [key]: formattedData[key] };
-      else responseData = {};
+      if (key) responseData = formattedData[key];
+      else responseData = [];
     }
 
     res.status(200).json({
