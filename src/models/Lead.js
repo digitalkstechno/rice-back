@@ -17,13 +17,7 @@ const leadSchema = new mongoose.Schema(
       enum: ['New', 'Contacted', 'Qualified', 'Lost'],
       default: 'New',
     },
-    email: {
-      type: String,
-      match: [
-        /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
-        'Please add a valid email',
-      ],
-    },
+
     phone: {
       type: String,
     },
