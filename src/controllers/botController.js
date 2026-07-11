@@ -525,6 +525,8 @@ const calculateQuote = async (req, res, next) => {
   try {
     let { variety, form, size, packType, country, portName, destination, leadId } = req.body;
 
+    const isStd50kg = size === '50 kg' && !packType;
+
     let targetCountry = country;
     let targetPort = portName;
 
@@ -536,7 +538,7 @@ const calculateQuote = async (req, res, next) => {
       }
     }
 
-    if (!variety || !form || !size || !packType) {
+    if (!variety || !form || !size || (!packType && !isStd50kg)) {
       return res.status(400).json({ success: false, error: 'variety, form, size, and packType are required' });
     }
 
@@ -557,24 +559,36 @@ const calculateQuote = async (req, res, next) => {
     const inlandInrPerMt = settingsDoc.inlandFreight || 2000;
     const customsInrPerContainer = settingsDoc.customsThc || 45000;
 
-    const targetGrams = parseSizeInGrams(size);
-    const flexiType = packType.replace(/[^a-zA-Z0-9]+/g, '.*');
+    const roundTo5 = (num) => Math.round(num / 5) * 5;
 
-    const allPacks = await Packaging.find({
-      productName: { $regex: new RegExp(flexiType, 'i') }
-    });
+    let containerMt, packagingUsdPerMt;
 
-    const packData = allPacks.find(p => parseSizeInGrams(p.packSize) === targetGrams);
+    if (isStd50kg) {
+      packType = '50 kg PP Bag';
+      containerMt = 25;
+      packagingUsdPerMt = 10;
+    } else {
+      const targetGrams = parseSizeInGrams(size);
+      const flexiType = packType.replace(/[^a-zA-Z0-9]+/g, '.*');
 
-    if (!packData || !packData.mtCapacity || !packData.packagingRate) {
-      return res.status(404).json({ success: false, error: `Packaging data not found for ${packType} - ${size}` });
+      const allPacks = await Packaging.find({
+        productName: { $regex: new RegExp(flexiType, 'i') }
+      });
+
+      const packData = allPacks.find(p => parseSizeInGrams(p.packSize) === targetGrams);
+
+      if (!packData || !packData.mtCapacity || !packData.packagingRate) {
+        return res.status(404).json({ success: false, error: `Packaging data not found for ${packType} - ${size}` });
+      }
+
+      containerMt = packData.mtCapacity;
+      const packInrPerUnit = packData.packagingRate;
+      const sizeGrams = parseSizeInGrams(size) || 1000;
+      const unitsPerMt = 1000000 / sizeGrams;
+
+      const rawPackUsd = (packInrPerUnit * unitsPerMt) / rate;
+      packagingUsdPerMt = roundTo5(rawPackUsd);
     }
-
-    const containerMt = packData.mtCapacity;
-    const packInrPerUnit = packData.packagingRate;
-
-    const sizeGrams = parseSizeInGrams(size) || 1000;
-    const unitsPerMt = 1000000 / sizeGrams;
 
     let seaFreightUsdPerContainer = 0;
     let cocUsd = 0;
@@ -595,17 +609,13 @@ const calculateQuote = async (req, res, next) => {
       hasFreight = true;
     }
 
-    const roundTo5 = (num) => Math.round(num / 5) * 5;
-
     const rawExMillUsd = rawInrPerMt / rate;
     const rawInlandUsd = inlandInrPerMt / rate;
     const rawCustomsUsd = (customsInrPerContainer / rate) / containerMt;
-    const rawPackUsd = (packInrPerUnit * unitsPerMt) / rate;
 
     const exMillUsdPerMt = roundTo5(rawExMillUsd);
     const inlandUsdPerMt = roundTo5(rawInlandUsd);
     const customsUsdPerMt = roundTo5(rawCustomsUsd);
-    const packagingUsdPerMt = roundTo5(rawPackUsd);
 
     const fobUsdPerMt = exMillUsdPerMt + inlandUsdPerMt + customsUsdPerMt + packagingUsdPerMt;
 
@@ -628,57 +638,81 @@ const calculateQuote = async (req, res, next) => {
     const dateOpts = { day: 'numeric', month: 'short', year: 'numeric' };
     const dateString = today.toLocaleDateString('en-GB', dateOpts);
 
-    let message = '';
-    const destName = hasFreight ? `${targetCountry} — ${targetPort}` : '';
-
-    if (hasFreight) {
-      message += `📋 DCS CIF — ${destName} — Live Price Quote\n`;
-    } else {
-      message += `📋 DCS EX MILL / FOB — Live Price Quote\n`;
-    }
-
-    message += `📅 ${dateString}\n`;
-    message += `Source updated: 24 Apr 2026 (demo)\n\n`;
-
-    message += `🌾 ${variety} — ${form}\n`;
-    message += `📦 Size: ${size} | Packaging: ${packType}\n`;
-    if (hasFreight) {
-      message += `🌍 Destination: ${destName}\n`;
-    }
-    message += `\n`;
     const inrPerMt = Math.round(rawInrPerMt / 100) * 100;
     const roundedInrPerKg = inrPerMt / 1000;
     const inrPerMtStr = inrPerMt.toLocaleString('en-IN');
 
-    message += `💵 Mill-Gate Price:\n`;
-    message += `• ₹${inrPerMtStr} / MT (≈ ₹${roundedInrPerKg} / kg)\n`;
-    message += `• $${exMillUsdPerMt} USD/MT (reference @ USD/INR ${rate})\n\n`;
+    let message = '';
 
-    message += `🚢 FOB: $${fobUsdPerMt} USD/MT\n`;
-    if (hasFreight) {
-      message += `📦 CIF ${destName}: $${cifUsdPerMt} USD/MT\n`;
+    if (isStd50kg) {
+      message += `📋 DCS Std 50 kg PP FOB — Live Price Quote\n`;
+      message += `📅 ${dateString}\n`;
+      message += `Source updated: 24 Apr 2026 (demo)\n\n`;
+      message += `🌾 ${variety} — ${form}\n`;
+      message += `📦 Size: ${size} | Packaging: ${packType}\n\n`;
+      message += `💵 Ex-Mill: $${exMillUsdPerMt} USD/MT\n`;
+      message += `🚢 FOB: $${fobUsdPerMt} USD/MT\n\n`;
+      message += `FOB build-up (USD/MT):\n`;
+      message += `• Ex-Mill $${exMillUsdPerMt}\n`;
+      message += `• Inland Freight $${inlandUsdPerMt}\n`;
+      message += `• Customs + THC $${customsUsdPerMt}\n`;
+      message += `• Packaging cost $${packagingUsdPerMt}\n`;
+      message += `• Total FOB $${fobUsdPerMt}\n\n`;
+      message += `Min. order: 1 × 20' FCL\n`;
+      message += `Container loading: ${containerMt} MT (depends on bag type)\n`;
+      message += `All figures rounded to the nearest USD 5 / MT for clarity.\n\n`;
+      message += `⚠️ Prices computed at USD/INR ${rate}.\n`;
+      message += `Subject to FX, freight & customs fluctuation.\n`;
+      message += `For binding quotes, contract terms, or counter-offers, tap Talk to Sales.`;
+    } else {
+      const destName = hasFreight ? `${targetCountry} — ${targetPort}` : '';
+
+      if (hasFreight) {
+        message += `📋 DCS CIF — ${destName} — Live Price Quote\n`;
+      } else {
+        message += `📋 DCS EX MILL / FOB — Live Price Quote\n`;
+      }
+
+      message += `📅 ${dateString}\n`;
+      message += `Source updated: 24 Apr 2026 (demo)\n\n`;
+
+      message += `🌾 ${variety} — ${form}\n`;
+      message += `📦 Size: ${size} | Packaging: ${packType}\n`;
+      if (hasFreight) {
+        message += `🌍 Destination: ${destName}\n`;
+      }
+      message += `\n`;
+
+      message += `💵 Mill-Gate Price:\n`;
+      message += `• ₹${inrPerMtStr} / MT (≈ ₹${roundedInrPerKg} / kg)\n`;
+      message += `• $${exMillUsdPerMt} USD/MT (reference @ USD/INR ${rate})\n\n`;
+
+      message += `🚢 FOB: $${fobUsdPerMt} USD/MT\n`;
+      if (hasFreight) {
+        message += `📦 CIF ${destName}: $${cifUsdPerMt} USD/MT\n`;
+      }
+      message += `\n`;
+
+      message += `FOB build-up (USD/MT):\n`;
+      message += `• Ex-Mill $${exMillUsdPerMt}\n`;
+      message += `• Inland Freight $${inlandUsdPerMt}\n`;
+      message += `• Customs + THC $${customsUsdPerMt}\n`;
+      message += `• Packaging cost $${packagingUsdPerMt}\n`;
+      message += `• Total FOB $${fobUsdPerMt}\n\n`;
+
+      if (hasFreight) {
+        message += `CIF build-up to ${destName} (USD/MT):\n`;
+        message += `• FOB $${fobUsdPerMt}\n`;
+        message += `• Sea Freight $${totalSeaAndCocUsdPerMt}\n`;
+        message += `• Total CIF $${cifUsdPerMt}\n\n`;
+      }
+
+      message += `Min. order: 1 × 20' FCL\n`;
+      message += `Container loading: ${containerMt} MT (depends on bag type)\n`;
+      message += `All figures rounded to the nearest USD 5 / MT for clarity.\n\n`;
+
+      message += `⚠️ Prices computed at USD/INR ${rate}`;
     }
-    message += `\n`;
-
-    message += `FOB build-up (USD/MT):\n`;
-    message += `• Ex-Mill $${exMillUsdPerMt}\n`;
-    message += `• Inland Freight $${inlandUsdPerMt}\n`;
-    message += `• Customs + THC $${customsUsdPerMt}\n`;
-    message += `• Packaging cost $${packagingUsdPerMt}\n`;
-    message += `• Total FOB $${fobUsdPerMt}\n\n`;
-
-    if (hasFreight) {
-      message += `CIF build-up to ${destName} (USD/MT):\n`;
-      message += `• FOB $${fobUsdPerMt}\n`;
-      message += `• Sea Freight $${totalSeaAndCocUsdPerMt}\n`;
-      message += `• Total CIF $${cifUsdPerMt}\n\n`;
-    }
-
-    message += `Min. order: 1 × 20' FCL\n`;
-    message += `Container loading: ${containerMt} MT (depends on bag type)\n`;
-    message += `All figures rounded to the nearest USD 5 / MT for clarity.\n\n`;
-
-    message += `⚠️ Prices computed at USD/INR ${rate}`;
 
     const quoteData = {
       variety,
@@ -724,7 +758,7 @@ const calculateQuote = async (req, res, next) => {
 const getLeadById = async (req, res, next) => {
   try {
     const { id } = req.params;
-    
+
     if (!id) {
       return res.status(400).json({ success: false, error: 'Lead ID is required' });
     }
