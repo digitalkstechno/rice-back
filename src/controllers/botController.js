@@ -763,7 +763,37 @@ const getLeadById = async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'Lead ID is required' });
     }
 
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, error: 'Invalid Lead ID format' });
+    }
+
     const lead = await Lead.findById(id);
+
+    if (!lead) {
+      return res.status(404).json({ success: false, error: 'Lead not found' });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: lead
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get Lead by Phone Number
+// @route   GET /api/bot/lead/phone/:phone
+// @access  Public
+const getLeadByPhone = async (req, res, next) => {
+  try {
+    const { phone } = req.params;
+
+    if (!phone) {
+      return res.status(400).json({ success: false, error: 'Phone number is required' });
+    }
+
+    const lead = await Lead.findOne({ phone: phone });
 
     if (!lead) {
       return res.status(404).json({ success: false, error: 'Lead not found' });
@@ -792,5 +822,6 @@ module.exports = {
   getDynamicCountries,
   calculateQuote,
   createLeadBot,
-  getLeadById
+  getLeadById,
+  getLeadByPhone
 };
