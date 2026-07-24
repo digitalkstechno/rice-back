@@ -326,14 +326,13 @@ const getDynamicForms = async (req, res, next) => {
 // @access  Public
 const createLeadBot = async (req, res, next) => {
   try {
-    const { fullName, mobileNumber, companyName, country, city, contactPerson, phone } = req.body;
+    const { fullName, mobileNumber, companyName, country, contactPerson, phone } = req.body;
 
     const lead = await Lead.create({
       contactPerson: fullName || contactPerson || 'Unknown Contact',
       phone: mobileNumber || phone,
       companyName: companyName || 'Unknown Company',
       country,
-      city,
       status: 'New'
     });
 
