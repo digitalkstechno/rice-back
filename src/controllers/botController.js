@@ -497,7 +497,13 @@ const getDynamicCountries = async (req, res, next) => {
     let idCounter = 1;
     for (const sub in groups) {
       const sortedEntries = Array.from(groups[sub]).sort((a, b) => a.localeCompare(b));
-      formattedData[sub] = sortedEntries.map(name => ({ id: String(idCounter++), name }));
+      formattedData[sub] = sortedEntries.map(name => {
+        let displayName = name;
+        if (displayName.length > 20) {
+          displayName = displayName.substring(0, 20) + '..';
+        }
+        return { id: String(idCounter++), name: displayName };
+      });
     }
 
     let responseData = formattedData;
@@ -595,9 +601,13 @@ const calculateQuote = async (req, res, next) => {
     let hasFreight = false;
 
     if (targetCountry && targetPort) {
+      const cleanCountry = targetCountry.replace(/\.+$/, '').trim();
+      const cleanPort = targetPort.replace(/\.+$/, '').trim();
+      const escapeReg = (str) => str.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+
       const freightData = await Freight.findOne({
-        country: { $regex: new RegExp(`^${targetCountry}$`, 'i') },
-        portName: { $regex: new RegExp(`^${targetPort}$`, 'i') }
+        country: { $regex: new RegExp(`^${escapeReg(cleanCountry)}`, 'i') },
+        portName: { $regex: new RegExp(`^${escapeReg(cleanPort)}`, 'i') }
       });
 
       if (!freightData) {
@@ -643,6 +653,7 @@ const calculateQuote = async (req, res, next) => {
     const inrPerMtStr = inrPerMt.toLocaleString('en-IN');
 
     let message = '';
+    const destName = hasFreight ? `${targetCountry} — ${targetPort}` : '';
 
     if (isStd50kg) {
       message += `📋 DCS Std 50 kg PP FOB — Live Price Quote\n`;
@@ -665,8 +676,6 @@ const calculateQuote = async (req, res, next) => {
       message += `Subject to FX, freight & customs fluctuation.\n`;
       message += `For binding quotes, contract terms, or counter-offers, tap Talk to Sales.`;
     } else {
-      const destName = hasFreight ? `${targetCountry} — ${targetPort}` : '';
-
       if (hasFreight) {
         message += `📋 DCS CIF — ${destName} — Live Price Quote\n`;
       } else {
