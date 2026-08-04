@@ -1,7 +1,17 @@
 const express = require('express');
-const { getSizeGroups, getDynamicSizes, getPackagingTypeGroups, getDynamicPackagingTypes, getVarietyGroups, getDynamicVarieties, getFormGroups, getDynamicForms, getDynamicRegions, getCountryGroups, getDynamicCountries, calculateQuote, createLeadBot, getLeadById, getLeadByPhone } = require('../controllers/botController');
+const { getSizeGroups, getDynamicSizes, getPackagingTypeGroups, getDynamicPackagingTypes, getVarietyGroups, getDynamicVarieties, getFormGroups, getDynamicForms, getDynamicRegions, getCountryGroups, getDynamicCountries, calculateQuote, createLeadBot, getLeadById, getLeadByPhone, getLanguages, getBotMessages } = require('../controllers/botController');
 
 const router = express.Router();
+
+// @route   GET /api/bot/menus/languages
+// @desc    Get supported languages list
+// @access  Public
+router.get('/menus/languages', getLanguages);
+
+// @route   GET /api/bot/messages
+// @desc    Get localized bot greetings and system prompt messages
+// @access  Public
+router.get('/messages', getBotMessages);
 
 // @route   GET /api/bot/menus/size-groups
 // @desc    Get the top-level size groups

@@ -4,6 +4,23 @@ const Packaging = require('../models/Packaging');
 const Setting = require('../models/Setting');
 const Freight = require('../models/Freight');
 const mongoose = require('mongoose');
+const { SUPPORTED_LANGUAGES, normalizeLang, translateText, getBotMessage, generateQuoteMessage } = require('../utils/i18n');
+
+// Helper to extract language from request or lead preference
+const getLangFromReq = async (req) => {
+  let lang = req.query.lang || req.query.language || req.body?.lang || req.body?.language || req.headers['x-language'] || req.headers['accept-language'];
+  
+  if (!lang && (req.body?.leadId || req.body?.id || req.query?.leadId)) {
+    const leadId = req.body?.leadId || req.body?.id || req.query?.leadId;
+    if (mongoose.Types.ObjectId.isValid(leadId)) {
+      const lead = await Lead.findById(leadId).select('language');
+      if (lead && lead.language) {
+        lang = lead.language;
+      }
+    }
+  }
+  return normalizeLang(lang);
+};
 
 // Helper function to generate sequential IDs (1, 2, 3...)
 const mapWithSequentialId = (items, startId = 1) => {
@@ -19,14 +36,53 @@ const parseSizeInGrams = (sizeStr) => {
   return 0;
 };
 
+// @desc    Get supported languages list
+// @route   GET /api/bot/menus/languages
+// @access  Public
+const getLanguages = async (req, res, next) => {
+  try {
+    res.status(200).json({
+      success: true,
+      data: SUPPORTED_LANGUAGES
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get localized bot messages (greetings, options prompt, select button text)
+// @route   GET /api/bot/messages
+// @access  Public
+const getBotMessages = async (req, res, next) => {
+  try {
+    const lang = await getLangFromReq(req);
+    const name = req.query.name || req.query.fullName || 'User';
+
+    const messages = {
+      language: lang,
+      welcomeIntro: getBotMessage('welcome_intro', lang),
+      welcomeWithName: getBotMessage('welcome_with_name', lang, { name }),
+      selectButtonText: getBotMessage('select_button', lang)
+    };
+
+    res.status(200).json({
+      success: true,
+      data: messages
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Get just the size groups
 // @route   GET /api/bot/menus/size-groups
 // @access  Public
 const getSizeGroups = async (req, res, next) => {
   try {
+    const lang = await getLangFromReq(req);
     const groups = [
-      { id: "1", name: "RETAIL / SMALL PACK" },
-      { id: "2", name: "BULK / EXPORT PACK" }
+      { id: "1", name: translateText("RETAIL / SMALL PACK", lang) },
+      { id: "2", name: translateText("BULK / EXPORT PACK", lang) }
     ];
     res.status(200).json({
       success: true,
@@ -42,6 +98,7 @@ const getSizeGroups = async (req, res, next) => {
 // @access  Public
 const getDynamicSizes = async (req, res, next) => {
   try {
+    const lang = await getLangFromReq(req);
     const distinctSizes = await Packaging.distinct('packSize');
     distinctSizes.sort((a, b) => parseSizeInGrams(a) - parseSizeInGrams(b));
 
@@ -59,9 +116,12 @@ const getDynamicSizes = async (req, res, next) => {
       }
     });
 
+    const keyRetail = translateText("RETAIL / SMALL PACK", lang);
+    const keyBulk = translateText("BULK / EXPORT PACK", lang);
+
     const groups = {
-      "RETAIL / SMALL PACK": retailSizes,
-      "BULK / EXPORT PACK": bulkSizes
+      [keyRetail]: retailSizes,
+      [keyBulk]: bulkSizes
     };
 
     let responseData = groups;
@@ -80,11 +140,13 @@ const getDynamicSizes = async (req, res, next) => {
     next(error);
   }
 };
+
 // @desc    Get just the packaging type groups
 // @route   GET /api/bot/menus/packaging-type-groups
 // @access  Public
 const getPackagingTypeGroups = async (req, res, next) => {
   try {
+    const lang = await getLangFromReq(req);
     const { size, group } = req.query;
 
     let targetGrams = null;
@@ -135,18 +197,23 @@ const getPackagingTypeGroups = async (req, res, next) => {
       availableGroups = availableGroups.filter(g => g.toUpperCase().includes(q));
     }
 
-    const groupsResponse = availableGroups.map((name, index) => ({ id: String(index + 1), name }));
+    const groupsResponse = availableGroups.map((name, index) => ({ 
+      id: String(index + 1), 
+      name: translateText(name, lang) 
+    }));
 
     res.status(200).json({ success: true, data: groupsResponse });
   } catch (error) {
     next(error);
   }
 };
+
 // @desc    Get dynamic packaging types based on size, grouped
 // @route   GET /api/bot/menus/packaging-types
 // @access  Public
 const getDynamicPackagingTypes = async (req, res, next) => {
   try {
+    const lang = await getLangFromReq(req);
     const { size } = req.query;
 
     let targetGrams = null;
@@ -196,16 +263,20 @@ const getDynamicPackagingTypes = async (req, res, next) => {
       }
     });
 
-    // Remove empty groups
+    // Remove empty groups & translate keys
+    const translatedGroups = {};
     Object.keys(groups).forEach(key => {
-      if (groups[key].length === 0) delete groups[key];
+      if (groups[key].length > 0) {
+        const translatedKey = translateText(key, lang);
+        translatedGroups[translatedKey] = groups[key];
+      }
     });
 
-    let responseData = groups;
+    let responseData = translatedGroups;
     if (req.query.group) {
       const q = req.query.group.toUpperCase();
-      const key = Object.keys(groups).find(k => k.toUpperCase().includes(q));
-      if (key) responseData = groups[key];
+      const key = Object.keys(translatedGroups).find(k => k.toUpperCase().includes(q));
+      if (key) responseData = translatedGroups[key];
       else responseData = [];
     }
 
@@ -217,39 +288,46 @@ const getDynamicPackagingTypes = async (req, res, next) => {
     next(error);
   }
 };
+
 // @desc    Get just the variety groups
 // @route   GET /api/bot/menus/variety-groups
 // @access  Public
 const getVarietyGroups = async (req, res, next) => {
   try {
+    const lang = await getLangFromReq(req);
     const groups = [
-      { id: "1", name: "BASMATI" },
-      { id: "2", name: "NON-BASMATI" }
+      { id: "1", name: translateText("BASMATI", lang) },
+      { id: "2", name: translateText("NON-BASMATI", lang) }
     ];
     res.status(200).json({ success: true, data: groups });
   } catch (error) {
     next(error);
   }
 };
+
 // @desc    Get dynamic rice varieties grouped by Basmati/Non-Basmati
 // @route   GET /api/bot/menus/varieties
 // @access  Public
 const getDynamicVarieties = async (req, res, next) => {
   try {
+    const lang = await getLangFromReq(req);
     const distinctVarieties = await Exmill.distinct('variety');
 
+    const keyBasmati = translateText("BASMATI", lang);
+    const keyNonBasmati = translateText("NON-BASMATI", lang);
+
     const groups = {
-      "BASMATI": [],
-      "NON-BASMATI": []
+      [keyBasmati]: [],
+      [keyNonBasmati]: []
     };
 
     let idCounter = 1;
     distinctVarieties.forEach(v => {
       const obj = { id: String(idCounter++), name: v };
       if (v.toLowerCase().includes('basmati')) {
-        groups["BASMATI"].push(obj);
+        groups[keyBasmati].push(obj);
       } else {
-        groups["NON-BASMATI"].push(obj);
+        groups[keyNonBasmati].push(obj);
       }
     });
 
@@ -275,8 +353,9 @@ const getDynamicVarieties = async (req, res, next) => {
 // @access  Public
 const getFormGroups = async (req, res, next) => {
   try {
+    const lang = await getLangFromReq(req);
     const groups = [
-      { id: "1", name: "PROCESSING METHOD" }
+      { id: "1", name: translateText("PROCESSING METHOD", lang) }
     ];
     res.status(200).json({ success: true, data: groups });
   } catch (error) {
@@ -289,18 +368,19 @@ const getFormGroups = async (req, res, next) => {
 // @access  Public
 const getDynamicForms = async (req, res, next) => {
   try {
+    const lang = await getLangFromReq(req);
     const { variety } = req.query;
     let filter = {};
     if (variety) {
-      // case insensitive exact match
       filter.variety = { $regex: new RegExp(`^${variety.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}$`, 'i') };
     }
 
     const distinctForms = await Exmill.find(filter).distinct('form');
     const mappedForms = mapWithSequentialId(distinctForms);
 
+    const groupKey = translateText("PROCESSING METHOD", lang);
     const groups = {
-      "PROCESSING METHOD": mappedForms
+      [groupKey]: mappedForms
     };
 
     let responseData = groups;
@@ -320,24 +400,33 @@ const getDynamicForms = async (req, res, next) => {
   }
 };
 
-
 // @desc    Create new lead from bot
 // @route   POST /api/bot/lead
 // @access  Public
 const createLeadBot = async (req, res, next) => {
   try {
-    const { fullName, mobileNumber, companyName, country, contactPerson, phone } = req.body;
+    const { fullName, mobileNumber, companyName, country, contactPerson, phone, language, lang } = req.body;
+
+    const leadLang = normalizeLang(language || lang || req.query.lang || req.query.language);
+    const personName = fullName || contactPerson || 'Unknown Contact';
 
     const lead = await Lead.create({
-      contactPerson: fullName || contactPerson || 'Unknown Contact',
+      contactPerson: personName,
       phone: mobileNumber || phone,
       companyName: companyName || 'Unknown Company',
       country,
+      language: leadLang,
       status: 'New'
     });
 
+    const welcomeMessage = getBotMessage('welcome_with_name', leadLang, { name: personName });
+    const selectButtonText = getBotMessage('select_button', leadLang);
+
     res.status(201).json({
       success: true,
+      language: leadLang,
+      welcomeMessage,
+      selectButtonText,
       data: lead,
     });
   } catch (error) {
@@ -357,9 +446,6 @@ const getSettingsDoc = async () => {
   }
   return settings || {};
 };
-
-
-// --- CIF APIs ---
 
 // Helper for Region mapping
 const getRegionForCountry = (countryStr) => {
@@ -387,6 +473,7 @@ const getRegionForCountry = (countryStr) => {
 // @access  Public
 const getDynamicRegions = async (req, res, next) => {
   try {
+    const lang = await getLangFromReq(req);
     const regions = [
       "Middle East",
       "EU Europe",
@@ -396,10 +483,14 @@ const getDynamicRegions = async (req, res, next) => {
       "AU Oceania"
     ];
 
-    const mappedRegions = mapWithSequentialId(regions);
+    const mappedRegions = regions.map((item, index) => ({ 
+      id: String(index + 1), 
+      name: translateText(item, lang) 
+    }));
 
+    const groupKey = translateText("REGION", lang);
     const groups = {
-      "REGION": mappedRegions
+      [groupKey]: mappedRegions
     };
 
     let responseData = groups;
@@ -450,6 +541,7 @@ const getSubRegion = (region, countryStr) => {
 // @access  Public
 const getCountryGroups = async (req, res, next) => {
   try {
+    const lang = await getLangFromReq(req);
     const { region } = req.query;
     const allFreights = await Freight.find().select('country');
 
@@ -462,7 +554,10 @@ const getCountryGroups = async (req, res, next) => {
       }
     });
 
-    const groups = Array.from(subRegionsSet).sort().map((sr, index) => ({ id: String(index + 1), name: sr }));
+    const groups = Array.from(subRegionsSet).sort().map((sr, index) => ({ 
+      id: String(index + 1), 
+      name: translateText(sr, lang) 
+    }));
 
     res.status(200).json({ success: true, data: groups });
   } catch (error) {
@@ -475,6 +570,7 @@ const getCountryGroups = async (req, res, next) => {
 // @access  Public
 const getDynamicCountries = async (req, res, next) => {
   try {
+    const lang = await getLangFromReq(req);
     const { region } = req.query;
 
     const allFreights = await Freight.find().select('country portName');
@@ -491,12 +587,13 @@ const getDynamicCountries = async (req, res, next) => {
       }
     });
 
-    // Convert Sets to Arrays
+    // Convert Sets to Arrays and translate sub-region group titles
     const formattedData = {};
     let idCounter = 1;
     for (const sub in groups) {
+      const translatedSubKey = translateText(sub, lang);
       const sortedEntries = Array.from(groups[sub]).sort((a, b) => a.localeCompare(b));
-      formattedData[sub] = sortedEntries.map(name => {
+      formattedData[translatedSubKey] = sortedEntries.map(name => {
         let displayName = name;
         if (displayName.length > 20) {
           displayName = displayName.substring(0, 20) + '..';
@@ -522,13 +619,14 @@ const getDynamicCountries = async (req, res, next) => {
   }
 };
 
-
 // @desc    Calculate general quote (EX MILL, FOB, CIF based on inputs)
 // @route   POST /api/bot/quote
 // @access  Public
 const calculateQuote = async (req, res, next) => {
   try {
     let { variety, form, size, packType, country, portName, destination, leadId } = req.body;
+
+    const reqLang = await getLangFromReq(req);
 
     const isStd50kg = size === '50 kg' && !packType;
 
@@ -651,76 +749,31 @@ const calculateQuote = async (req, res, next) => {
     const roundedInrPerKg = inrPerMt / 1000;
     const inrPerMtStr = inrPerMt.toLocaleString('en-IN');
 
-    let message = '';
     const destName = hasFreight ? `${targetCountry} — ${targetPort}` : '';
 
-    if (isStd50kg) {
-      message += `📋 DCS Std 50 kg PP FOB — Live Price Quote\n`;
-      message += `📅 ${dateString}\n`;
-      message += `Source updated: 24 Apr 2026 (demo)\n\n`;
-      message += `🌾 ${variety} — ${form}\n`;
-      message += `📦 Size: ${size} | Packaging: ${packType}\n\n`;
-      message += `💵 Ex-Mill: $${exMillUsdPerMt} USD/MT\n`;
-      message += `🚢 FOB: $${fobUsdPerMt} USD/MT\n\n`;
-      message += `FOB build-up (USD/MT):\n`;
-      message += `• Ex-Mill $${exMillUsdPerMt}\n`;
-      message += `• Inland Freight $${inlandUsdPerMt}\n`;
-      message += `• Customs + THC $${customsUsdPerMt}\n`;
-      message += `• Packaging cost $${packagingUsdPerMt}\n`;
-      message += `• Total FOB $${fobUsdPerMt}\n\n`;
-      message += `Min. order: 1 × 20' FCL\n`;
-      message += `Container loading: ${containerMt} MT (depends on bag type)\n`;
-      message += `All figures rounded to the nearest USD 5 / MT for clarity.\n\n`;
-      message += `⚠️ Prices computed at USD/INR ${rate}.\n`;
-      message += `Subject to FX, freight & customs fluctuation.\n`;
-      message += `For binding quotes, contract terms, or counter-offers, tap Talk to Sales.`;
-    } else {
-      if (hasFreight) {
-        message += `📋 DCS CIF — ${destName} — Live Price Quote\n`;
-      } else {
-        message += `📋 DCS EX MILL / FOB — Live Price Quote\n`;
-      }
+    const quoteDetails = {
+      variety,
+      form,
+      size,
+      packType,
+      destName,
+      hasFreight,
+      isStd50kg,
+      dateString,
+      inrPerMtStr,
+      roundedInrPerKg,
+      exMillUsdPerMt,
+      inlandUsdPerMt,
+      customsUsdPerMt,
+      packagingUsdPerMt,
+      fobUsdPerMt,
+      totalSeaAndCocUsdPerMt,
+      cifUsdPerMt,
+      containerMt,
+      rate
+    };
 
-      message += `📅 ${dateString}\n`;
-      message += `Source updated: 24 Apr 2026 (demo)\n\n`;
-
-      message += `🌾 ${variety} — ${form}\n`;
-      message += `📦 Size: ${size} | Packaging: ${packType}\n`;
-      if (hasFreight) {
-        message += `🌍 Destination: ${destName}\n`;
-      }
-      message += `\n`;
-
-      message += `💵 Mill-Gate Price:\n`;
-      message += `• ₹${inrPerMtStr} / MT (≈ ₹${roundedInrPerKg} / kg)\n`;
-      message += `• $${exMillUsdPerMt} USD/MT (reference @ USD/INR ${rate})\n\n`;
-
-      message += `🚢 FOB: $${fobUsdPerMt} USD/MT\n`;
-      if (hasFreight) {
-        message += `📦 CIF ${destName}: $${cifUsdPerMt} USD/MT\n`;
-      }
-      message += `\n`;
-
-      message += `FOB build-up (USD/MT):\n`;
-      message += `• Ex-Mill $${exMillUsdPerMt}\n`;
-      message += `• Inland Freight $${inlandUsdPerMt}\n`;
-      message += `• Customs + THC $${customsUsdPerMt}\n`;
-      message += `• Packaging cost $${packagingUsdPerMt}\n`;
-      message += `• Total FOB $${fobUsdPerMt}\n\n`;
-
-      if (hasFreight) {
-        message += `CIF build-up to ${destName} (USD/MT):\n`;
-        message += `• FOB $${fobUsdPerMt}\n`;
-        message += `• Sea Freight $${totalSeaAndCocUsdPerMt}\n`;
-        message += `• Total CIF $${cifUsdPerMt}\n\n`;
-      }
-
-      message += `Min. order: 1 × 20' FCL\n`;
-      message += `Container loading: ${containerMt} MT (depends on bag type)\n`;
-      message += `All figures rounded to the nearest USD 5 / MT for clarity.\n\n`;
-
-      message += `⚠️ Prices computed at USD/INR ${rate}`;
-    }
+    const message = generateQuoteMessage(quoteDetails, reqLang);
 
     const quoteData = {
       variety,
@@ -741,12 +794,13 @@ const calculateQuote = async (req, res, next) => {
         cifUsdPerMt
       }),
       rate,
+      language: reqLang,
       message
     };
 
     const finalLeadId = leadId || req.body.id;
     if (finalLeadId) {
-      await Lead.findByIdAndUpdate(finalLeadId, { quote: quoteData });
+      await Lead.findByIdAndUpdate(finalLeadId, { quote: quoteData, language: reqLang });
     }
 
     res.status(200).json({
@@ -817,6 +871,8 @@ const getLeadByPhone = async (req, res, next) => {
 };
 
 module.exports = {
+  getLanguages,
+  getBotMessages,
   getSizeGroups,
   getDynamicSizes,
   getPackagingTypeGroups,
