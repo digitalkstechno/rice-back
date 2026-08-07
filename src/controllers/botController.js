@@ -479,6 +479,12 @@ const createLeadBot = async (req, res, next) => {
     const selectButtonText = getBotMessage('select_button', leadLang);
 
     let leadData = lead.toObject();
+    if (leadData.contactPerson) {
+      leadData.contactPerson = translateText(leadData.contactPerson, leadLang);
+    }
+    if (leadData.companyName) {
+      leadData.companyName = translateText(leadData.companyName, leadLang);
+    }
     if (leadData.country) {
       leadData.country = translateText(leadData.country, leadLang);
     }
@@ -936,6 +942,12 @@ const getLeadById = async (req, res, next) => {
     const selectButtonText = getBotMessage('select_button', leadLang);
 
     let leadData = lead.toObject();
+    if (leadData.contactPerson) {
+      leadData.contactPerson = translateText(leadData.contactPerson, leadLang);
+    }
+    if (leadData.companyName) {
+      leadData.companyName = translateText(leadData.companyName, leadLang);
+    }
     if (leadData.country) {
       leadData.country = translateText(leadData.country, leadLang);
     }
@@ -986,6 +998,12 @@ const getLeadByPhone = async (req, res, next) => {
     const selectButtonText = getBotMessage('select_button', leadLang);
 
     let leadData = lead.toObject();
+    if (leadData.contactPerson) {
+      leadData.contactPerson = translateText(leadData.contactPerson, leadLang);
+    }
+    if (leadData.companyName) {
+      leadData.companyName = translateText(leadData.companyName, leadLang);
+    }
     if (leadData.country) {
       leadData.country = translateText(leadData.country, leadLang);
     }
