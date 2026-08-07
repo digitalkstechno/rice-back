@@ -478,12 +478,20 @@ const createLeadBot = async (req, res, next) => {
     const welcomeMessage = getBotMessage('welcome_with_name', leadLang, { name: personName });
     const selectButtonText = getBotMessage('select_button', leadLang);
 
+    let leadData = lead.toObject();
+    if (leadData.country) {
+      leadData.country = translateText(leadData.country, leadLang);
+    }
+    if (leadData.status) {
+      leadData.status = translateText(leadData.status, leadLang);
+    }
+
     res.status(201).json({
       success: true,
       language: leadLang,
       welcomeMessage,
       selectButtonText,
-      data: lead,
+      data: leadData,
     });
   } catch (error) {
     next(error);
@@ -911,15 +919,39 @@ const getLeadById = async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'Invalid Lead ID format' });
     }
 
-    const lead = await Lead.findById(id);
+    let lead = await Lead.findById(id);
 
     if (!lead) {
       return res.status(404).json({ success: false, error: 'Lead not found' });
     }
 
+    const reqLang = await getLangFromReq(req);
+    if (req.query.lang || req.query.language) {
+      lead.language = reqLang;
+      await lead.save();
+    }
+
+    const leadLang = lead.language || reqLang;
+    const welcomeMessage = getBotMessage('welcome_with_name', leadLang, { name: lead.contactPerson || 'User' });
+    const selectButtonText = getBotMessage('select_button', leadLang);
+
+    let leadData = lead.toObject();
+    if (leadData.country) {
+      leadData.country = translateText(leadData.country, leadLang);
+    }
+    if (leadData.status) {
+      leadData.status = translateText(leadData.status, leadLang);
+    }
+    if (leadData.quote && leadData.quote.variety) {
+      leadData.quote.message = generateQuoteMessage(leadData.quote, leadLang);
+    }
+
     res.status(200).json({
       success: true,
-      data: lead
+      language: leadLang,
+      welcomeMessage,
+      selectButtonText,
+      data: leadData
     });
   } catch (error) {
     next(error);
@@ -937,15 +969,39 @@ const getLeadByPhone = async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'Phone number is required' });
     }
 
-    const lead = await Lead.findOne({ phone: phone });
+    let lead = await Lead.findOne({ phone: phone });
 
     if (!lead) {
       return res.status(404).json({ success: false, error: 'Lead not found' });
     }
 
+    const reqLang = await getLangFromReq(req);
+    if (req.query.lang || req.query.language) {
+      lead.language = reqLang;
+      await lead.save();
+    }
+
+    const leadLang = lead.language || reqLang;
+    const welcomeMessage = getBotMessage('welcome_with_name', leadLang, { name: lead.contactPerson || 'User' });
+    const selectButtonText = getBotMessage('select_button', leadLang);
+
+    let leadData = lead.toObject();
+    if (leadData.country) {
+      leadData.country = translateText(leadData.country, leadLang);
+    }
+    if (leadData.status) {
+      leadData.status = translateText(leadData.status, leadLang);
+    }
+    if (leadData.quote && leadData.quote.variety) {
+      leadData.quote.message = generateQuoteMessage(leadData.quote, leadLang);
+    }
+
     res.status(200).json({
       success: true,
-      data: lead
+      language: leadLang,
+      welcomeMessage,
+      selectButtonText,
+      data: leadData
     });
   } catch (error) {
     next(error);

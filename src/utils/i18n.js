@@ -346,6 +346,7 @@ const DICTIONARY = {
   "Swarna": { en: "Swarna", ar: "أرز سوارنا", fr: "Riz Swarna", es: "Arroz Swarna", zh: "斯瓦纳大米", ru: "Рис Сварна" },
 
   // Regions
+  "New": { en: "New", ar: "جديد", fr: "Nouveau", es: "Nuevo", zh: "新", ru: "Новый" },
   "Middle East": { en: "Middle East", ar: "الشرق الأوسط", fr: "Moyen-Orient", es: "Oriente Medio", zh: "中东", ru: "Ближний Восток" },
   "EU Europe": { en: "EU Europe", ar: "أوروبا", fr: "Europe", es: "Europa", zh: "欧洲", ru: "Европа ЕС" },
   "Africa": { en: "Africa", ar: "أفريقيا", fr: "Afrique", es: "África", zh: "非洲", ru: "Аفريقة" },
