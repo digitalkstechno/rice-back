@@ -4,7 +4,7 @@ const Packaging = require('../models/Packaging');
 const Setting = require('../models/Setting');
 const Freight = require('../models/Freight');
 const mongoose = require('mongoose');
-const { SUPPORTED_LANGUAGES, normalizeLang, translateText, getBotMessage, generateQuoteMessage } = require('../utils/i18n');
+const { SUPPORTED_LANGUAGES, normalizeLang, translateText, normalizeToEnglish, getBotMessage, generateQuoteMessage } = require('../utils/i18n');
 
 // Helper to extract language from request or lead preference
 const getLangFromReq = async (req) => {
@@ -29,6 +29,7 @@ const mapWithSequentialId = (items, startId = 1) => {
 
 // Helper for parsing grams from size string for sorting/grouping
 const parseSizeInGrams = (sizeStr) => {
+  if (!sizeStr) return 0;
   const s = sizeStr.toLowerCase();
   if (s.includes('g') && !s.includes('kg')) return parseInt(s, 10);
   if (s.includes('kg')) return parseFloat(s) * 1000;
@@ -57,12 +58,33 @@ const getBotMessages = async (req, res, next) => {
   try {
     const lang = await getLangFromReq(req);
     const name = req.query.name || req.query.fullName || 'User';
+    const rawOption = req.query.option || req.query.type || req.query.select;
+
+    const mainOptions = getBotMessage('main_options', lang);
+    const ricePricesOptions = getBotMessage('rice_prices_options', lang);
+    const edibleOilsOptions = getBotMessage('edible_oils_options', lang);
+
+    if (rawOption) {
+      const q = String(rawOption).toLowerCase().trim();
+      if (q.includes('rice') || q.includes('price')) {
+        return res.status(200).json({ success: true, data: ricePricesOptions });
+      }
+      if (q.includes('edible') || q.includes('oil')) {
+        return res.status(200).json({ success: true, data: edibleOilsOptions });
+      }
+      if (q.includes('main')) {
+        return res.status(200).json({ success: true, data: mainOptions });
+      }
+    }
 
     const messages = {
       language: lang,
       welcomeIntro: getBotMessage('welcome_intro', lang),
       welcomeWithName: getBotMessage('welcome_with_name', lang, { name }),
-      selectButtonText: getBotMessage('select_button', lang)
+      selectButtonText: getBotMessage('select_button', lang),
+      mainOptions,
+      ricePricesOptions,
+      edibleOilsOptions
     };
 
     res.status(200).json({
@@ -109,10 +131,11 @@ const getDynamicSizes = async (req, res, next) => {
     distinctSizes.forEach(size => {
       const grams = parseSizeInGrams(size);
       const isLbs = size.toLowerCase().includes('lbs');
+      const translatedSize = translateText(size, lang);
       if (isLbs || grams > 25000) {
-        bulkSizes.push({ id: String(idCounter++), name: size });
+        bulkSizes.push({ id: String(idCounter++), name: translatedSize });
       } else {
-        retailSizes.push({ id: String(idCounter++), name: size });
+        retailSizes.push({ id: String(idCounter++), name: translatedSize });
       }
     });
 
@@ -126,8 +149,8 @@ const getDynamicSizes = async (req, res, next) => {
 
     let responseData = groups;
     if (req.query.group) {
-      const q = req.query.group.toUpperCase();
-      const key = Object.keys(groups).find(k => k.toUpperCase().includes(q));
+      const q = normalizeToEnglish(req.query.group).toUpperCase();
+      const key = Object.keys(groups).find(k => k.toUpperCase().includes(q) || normalizeToEnglish(k).toUpperCase().includes(q));
       if (key) responseData = groups[key];
       else responseData = [];
     }
@@ -148,10 +171,11 @@ const getPackagingTypeGroups = async (req, res, next) => {
   try {
     const lang = await getLangFromReq(req);
     const { size, group } = req.query;
+    const normSize = normalizeToEnglish(size);
 
     let targetGrams = null;
-    if (size) {
-      targetGrams = parseSizeInGrams(size);
+    if (normSize) {
+      targetGrams = parseSizeInGrams(normSize);
     }
 
     const allPackaging = await Packaging.find().select('productName packSize');
@@ -193,8 +217,8 @@ const getPackagingTypeGroups = async (req, res, next) => {
     let availableGroups = Object.keys(groupCounts).filter(key => groupCounts[key] > 0);
 
     if (group) {
-      const q = group.toUpperCase();
-      availableGroups = availableGroups.filter(g => g.toUpperCase().includes(q));
+      const q = normalizeToEnglish(group).toUpperCase();
+      availableGroups = availableGroups.filter(g => g.toUpperCase().includes(q) || normalizeToEnglish(g).toUpperCase().includes(q));
     }
 
     const groupsResponse = availableGroups.map((name, index) => ({ 
@@ -215,10 +239,11 @@ const getDynamicPackagingTypes = async (req, res, next) => {
   try {
     const lang = await getLangFromReq(req);
     const { size } = req.query;
+    const normSize = normalizeToEnglish(size);
 
     let targetGrams = null;
-    if (size) {
-      targetGrams = parseSizeInGrams(size);
+    if (normSize) {
+      targetGrams = parseSizeInGrams(normSize);
     }
 
     const allPackaging = await Packaging.find().select('productName packSize');
@@ -245,10 +270,7 @@ const getDynamicPackagingTypes = async (req, res, next) => {
     let idCounter = 1;
     matchedNames.forEach(name => {
       const lowerName = name.toLowerCase();
-      let displayName = name;
-      if (displayName.length > 20) {
-        displayName = displayName.substring(0, 20) + '..';
-      }
+      let displayName = translateText(name, lang);
       const obj = { id: String(idCounter++), name: displayName };
       if (lowerName.includes('jute')) {
         groups["JUTE BAGS"].push(obj);
@@ -274,10 +296,17 @@ const getDynamicPackagingTypes = async (req, res, next) => {
 
     let responseData = translatedGroups;
     if (req.query.group) {
-      const q = req.query.group.toUpperCase();
-      const key = Object.keys(translatedGroups).find(k => k.toUpperCase().includes(q));
-      if (key) responseData = translatedGroups[key];
-      else responseData = [];
+      const qNorm = normalizeToEnglish(req.query.group).toUpperCase().replace(/S$/, '');
+      const matchedKey = Object.keys(groups).find(k => {
+        const kNorm = k.toUpperCase().replace(/S$/, '');
+        const transNorm = translateText(k, lang).toUpperCase().replace(/S$/, '');
+        return kNorm.includes(qNorm) || qNorm.includes(kNorm) || transNorm.includes(qNorm) || qNorm.includes(transNorm);
+      });
+      if (matchedKey && groups[matchedKey]) {
+        responseData = groups[matchedKey];
+      } else {
+        responseData = [];
+      }
     }
 
     res.status(200).json({
@@ -322,21 +351,34 @@ const getDynamicVarieties = async (req, res, next) => {
     };
 
     let idCounter = 1;
+    const seenBasmati = new Set();
+    const seenNonBasmati = new Set();
+
     distinctVarieties.forEach(v => {
-      const obj = { id: String(idCounter++), name: v };
+      const translatedV = translateText(v, lang);
       if (v.toLowerCase().includes('basmati')) {
-        groups[keyBasmati].push(obj);
+        if (!seenBasmati.has(translatedV)) {
+          seenBasmati.add(translatedV);
+          groups[keyBasmati].push({ id: String(idCounter++), name: translatedV });
+        }
       } else {
-        groups[keyNonBasmati].push(obj);
+        if (!seenNonBasmati.has(translatedV)) {
+          seenNonBasmati.add(translatedV);
+          groups[keyNonBasmati].push({ id: String(idCounter++), name: translatedV });
+        }
       }
     });
 
     let responseData = groups;
     if (req.query.group) {
-      const q = req.query.group.toUpperCase();
-      const key = Object.keys(groups).find(k => k.toUpperCase().includes(q));
-      if (key) responseData = groups[key];
-      else responseData = [];
+      const qNorm = normalizeToEnglish(req.query.group).toUpperCase();
+      const isNonBasmati = qNorm.includes('NON');
+      const matchedKey = isNonBasmati ? keyNonBasmati : keyBasmati;
+      if (matchedKey && groups[matchedKey]) {
+        responseData = groups[matchedKey];
+      } else {
+        responseData = [];
+      }
     }
 
     res.status(200).json({
@@ -369,14 +411,28 @@ const getFormGroups = async (req, res, next) => {
 const getDynamicForms = async (req, res, next) => {
   try {
     const lang = await getLangFromReq(req);
-    const { variety } = req.query;
+    const rawVariety = req.query.variety;
+    const variety = rawVariety ? normalizeToEnglish(rawVariety) : null;
+
     let filter = {};
     if (variety) {
       filter.variety = { $regex: new RegExp(`^${variety.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}$`, 'i') };
     }
 
     const distinctForms = await Exmill.find(filter).distinct('form');
-    const mappedForms = mapWithSequentialId(distinctForms);
+    const seenNames = new Set();
+    const mappedForms = [];
+
+    distinctForms.forEach(item => {
+      const translatedName = translateText(item, lang);
+      if (!seenNames.has(translatedName)) {
+        seenNames.add(translatedName);
+        mappedForms.push({
+          id: String(mappedForms.length + 1),
+          name: translatedName
+        });
+      }
+    });
 
     const groupKey = translateText("PROCESSING METHOD", lang);
     const groups = {
@@ -385,8 +441,8 @@ const getDynamicForms = async (req, res, next) => {
 
     let responseData = groups;
     if (req.query.group) {
-      const q = req.query.group.toUpperCase();
-      const key = Object.keys(groups).find(k => k.toUpperCase().includes(q));
+      const q = normalizeToEnglish(req.query.group).toUpperCase();
+      const key = Object.keys(groups).find(k => k.toUpperCase().includes(q) || normalizeToEnglish(k).toUpperCase().includes(q));
       if (key) responseData = groups[key];
       else responseData = [];
     }
@@ -414,7 +470,7 @@ const createLeadBot = async (req, res, next) => {
       contactPerson: personName,
       phone: mobileNumber || phone,
       companyName: companyName || 'Unknown Company',
-      country,
+      country: country ? normalizeToEnglish(country) : country,
       language: leadLang,
       status: 'New'
     });
@@ -495,8 +551,8 @@ const getDynamicRegions = async (req, res, next) => {
 
     let responseData = groups;
     if (req.query.group) {
-      const q = req.query.group.toUpperCase();
-      const key = Object.keys(groups).find(k => k.toUpperCase().includes(q));
+      const q = normalizeToEnglish(req.query.group).toUpperCase();
+      const key = Object.keys(groups).find(k => k.toUpperCase().includes(q) || normalizeToEnglish(k).toUpperCase().includes(q));
       if (key) responseData = groups[key];
       else responseData = [];
     }
@@ -542,7 +598,9 @@ const getSubRegion = (region, countryStr) => {
 const getCountryGroups = async (req, res, next) => {
   try {
     const lang = await getLangFromReq(req);
-    const { region } = req.query;
+    const rawRegion = req.query.region;
+    const region = rawRegion ? normalizeToEnglish(rawRegion) : null;
+
     const allFreights = await Freight.find().select('country');
 
     const subRegionsSet = new Set();
@@ -571,7 +629,8 @@ const getCountryGroups = async (req, res, next) => {
 const getDynamicCountries = async (req, res, next) => {
   try {
     const lang = await getLangFromReq(req);
-    const { region } = req.query;
+    const rawRegion = req.query.region;
+    const region = rawRegion ? normalizeToEnglish(rawRegion) : null;
 
     const allFreights = await Freight.find().select('country portName');
 
@@ -582,30 +641,44 @@ const getDynamicCountries = async (req, res, next) => {
       if (!region || region === 'Other' || fRegion === region) {
         const subRegion = getSubRegion(fRegion, f.country);
         if (!groups[subRegion]) groups[subRegion] = new Set();
-        const formatted = `${f.country} — ${f.portName}`;
-        groups[subRegion].add(formatted);
+
+        const cClean = f.country ? f.country.trim() : '';
+        const pClean = f.portName ? f.portName.trim() : '';
+
+        const transCountry = translateText(cClean, lang);
+        const transPort = pClean ? translateText(pClean, lang) : '';
+
+        let displayName = transCountry;
+        if (transPort && transPort.toLowerCase() !== transCountry.toLowerCase() && !transCountry.toLowerCase().includes(transPort.toLowerCase())) {
+          displayName = `${transCountry} — ${transPort}`;
+        }
+
+        groups[subRegion].add(displayName);
       }
     });
 
-    // Convert Sets to Arrays and translate sub-region group titles
+    // Convert Sets to Arrays and format response
     const formattedData = {};
     let idCounter = 1;
     for (const sub in groups) {
       const translatedSubKey = translateText(sub, lang);
       const sortedEntries = Array.from(groups[sub]).sort((a, b) => a.localeCompare(b));
-      formattedData[translatedSubKey] = sortedEntries.map(name => {
-        let displayName = name;
-        if (displayName.length > 20) {
-          displayName = displayName.substring(0, 20) + '..';
+      
+      const seenNames = new Set();
+      const list = [];
+      sortedEntries.forEach(displayName => {
+        if (!seenNames.has(displayName)) {
+          seenNames.add(displayName);
+          list.push({ id: String(idCounter++), name: displayName });
         }
-        return { id: String(idCounter++), name: displayName };
       });
+      formattedData[translatedSubKey] = list;
     }
 
     let responseData = formattedData;
     if (req.query.group) {
-      const q = req.query.group.toUpperCase();
-      const key = Object.keys(formattedData).find(k => k.toUpperCase().includes(q));
+      const q = normalizeToEnglish(req.query.group).toUpperCase();
+      const key = Object.keys(formattedData).find(k => k.toUpperCase().includes(q) || normalizeToEnglish(k).toUpperCase().includes(q));
       if (key) responseData = formattedData[key];
       else responseData = [];
     }
@@ -628,7 +701,16 @@ const calculateQuote = async (req, res, next) => {
 
     const reqLang = await getLangFromReq(req);
 
-    const isStd50kg = size === '50 kg' && !packType;
+    // Normalize inputs to English for DB lookup
+    variety = variety ? normalizeToEnglish(variety) : variety;
+    form = form ? normalizeToEnglish(form) : form;
+    size = size ? normalizeToEnglish(size) : size;
+    packType = packType ? normalizeToEnglish(packType) : packType;
+    country = country ? normalizeToEnglish(country) : country;
+    portName = portName ? normalizeToEnglish(portName) : portName;
+    destination = destination ? normalizeToEnglish(destination) : destination;
+
+    const isStd50kg = size === '50 kg' && (!packType || packType === '50 kg PP Bag');
 
     let targetCountry = country;
     let targetPort = portName;
@@ -636,8 +718,8 @@ const calculateQuote = async (req, res, next) => {
     if (destination && (!targetCountry || !targetPort)) {
       const parts = destination.split('—').map(p => p.trim());
       if (parts.length === 2) {
-        targetCountry = parts[0];
-        targetPort = parts[1];
+        targetCountry = normalizeToEnglish(parts[0]);
+        targetPort = normalizeToEnglish(parts[1]);
       }
     }
 
@@ -646,8 +728,8 @@ const calculateQuote = async (req, res, next) => {
     }
 
     const exmillData = await Exmill.findOne({
-      variety: { $regex: new RegExp(`^${variety}$`, 'i') },
-      form: { $regex: new RegExp(`^${form}$`, 'i') }
+      variety: { $regex: new RegExp(`^${variety.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}$`, 'i') },
+      form: { $regex: new RegExp(`^${form.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}$`, 'i') }
     });
 
     if (!exmillData || !exmillData.inrPerKg) {
@@ -749,13 +831,13 @@ const calculateQuote = async (req, res, next) => {
     const roundedInrPerKg = inrPerMt / 1000;
     const inrPerMtStr = inrPerMt.toLocaleString('en-IN');
 
-    const destName = hasFreight ? `${targetCountry} — ${targetPort}` : '';
+    const destName = hasFreight ? `${translateText(targetCountry, reqLang)} — ${targetPort}` : '';
 
     const quoteDetails = {
-      variety,
-      form,
-      size,
-      packType,
+      variety: translateText(variety, reqLang),
+      form: translateText(form, reqLang),
+      size: translateText(size, reqLang),
+      packType: translateText(packType, reqLang),
       destName,
       hasFreight,
       isStd50kg,
@@ -776,10 +858,10 @@ const calculateQuote = async (req, res, next) => {
     const message = generateQuoteMessage(quoteDetails, reqLang);
 
     const quoteData = {
-      variety,
-      form,
-      size,
-      packType,
+      variety: translateText(variety, reqLang),
+      form: translateText(form, reqLang),
+      size: translateText(size, reqLang),
+      packType: translateText(packType, reqLang),
       destination: hasFreight ? destName : null,
       containerMt,
       inrPerMt,
