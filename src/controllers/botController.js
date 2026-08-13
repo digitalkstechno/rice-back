@@ -229,7 +229,7 @@ const getPackagingTypeGroups = async (req, res, next) => {
     res.status(200).json({ success: true, data: groupsResponse });
   } catch (error) {
     next(error);
-  }
+}
 };
 
 // @desc    Get dynamic packaging types based on size, grouped
@@ -239,11 +239,10 @@ const getDynamicPackagingTypes = async (req, res, next) => {
   try {
     const lang = await getLangFromReq(req);
     const { size } = req.query;
-    const normSize = normalizeToEnglish(size);
 
     let targetGrams = null;
-    if (normSize) {
-      targetGrams = parseSizeInGrams(normSize);
+    if (size) {
+      targetGrams = parseSizeInGrams(size);
     }
 
     const allPackaging = await Packaging.find().select('productName packSize');
