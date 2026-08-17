@@ -736,10 +736,6 @@ const calculateQuote = async (req, res, next) => {
       }
     }
 
-    if (!variety || !form || !size || (!packType && !isStd50kg)) {
-      return res.status(400).json({ success: false, error: 'variety, form, size, and packType are required' });
-    }
-
     const exmillData = await Exmill.findOne({
       variety: { $regex: new RegExp(`^${variety.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}$`, 'i') },
       form: { $regex: new RegExp(`^${form.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}$`, 'i') }
