@@ -171,11 +171,11 @@ const getPackagingTypeGroups = async (req, res, next) => {
   try {
     const lang = await getLangFromReq(req);
     const { size, group } = req.query;
-    const normSize = normalizeToEnglish(size);
+    // const size = normalizeToEnglish(size);
 
     let targetGrams = null;
-    if (normSize) {
-      targetGrams = parseSizeInGrams(normSize);
+    if (size) {
+      targetGrams = parseSizeInGrams(size);
     }
 
     const allPackaging = await Packaging.find().select('productName packSize');
@@ -270,6 +270,9 @@ const getDynamicPackagingTypes = async (req, res, next) => {
     matchedNames.forEach(name => {
       const lowerName = name.toLowerCase();
       let displayName = translateText(name, lang);
+      if (displayName.length > 20) {
+        displayName = displayName.substring(0, 20) + '..';
+      }
       const obj = { id: String(idCounter++), name: displayName };
       if (lowerName.includes('jute')) {
         groups["JUTE BAGS"].push(obj);
