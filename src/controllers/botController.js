@@ -737,8 +737,8 @@ const calculateQuote = async (req, res, next) => {
     }
 
     const exmillData = await Exmill.findOne({
-      variety: { $regex: new RegExp(`^${variety.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}$`, 'i') },
-      form: { $regex: new RegExp(`^${form.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}$`, 'i') }
+      variety: { $regex: new RegExp(`^${(variety || '').replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}$`, 'i') },
+      form: { $regex: new RegExp(`^${(form || '').replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}$`, 'i') }
     });
 
     if (!exmillData || !exmillData.inrPerKg) {
@@ -763,7 +763,7 @@ const calculateQuote = async (req, res, next) => {
       packagingUsdPerMt = 10;
     } else {
       const targetGrams = parseSizeInGrams(size);
-      const flexiType = packType.replace(/[^a-zA-Z0-9]+/g, '.*');
+      const flexiType = (packType || '').replace(/[^a-zA-Z0-9]+/g, '.*');
 
       const allPacks = await Packaging.find({
         productName: { $regex: new RegExp(flexiType, 'i') }
