@@ -720,7 +720,7 @@ const calculateQuote = async (req, res, next) => {
     // Normalize inputs to English for DB lookup
     variety = variety ? normalizeToEnglish(variety) : variety;
     form = form ? normalizeToEnglish(form) : form;
-    size = size ? normalizeToEnglish(size) : size;
+    size = size;
     packType = packType ? normalizeToEnglish(packType) : packType;
     country = country ? normalizeToEnglish(country) : country;
     portName = portName ? normalizeToEnglish(portName) : portName;
